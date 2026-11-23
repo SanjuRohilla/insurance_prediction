@@ -1,44 +1,46 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, computed_field
-from typing import Literal, Annotated
-import pickle
-import pandas as pd
 from schema.user_input import UserInput
+from schema.prediction_response import PredictionResponse
+from model.predict import predict_output, model, MODEL_VERSION
 
-with open('model/model.pkl', 'rb') as f:
-    model = pickle.load(f)
 app = FastAPI()
+
+# human readable       
 @app.get('/')
 def home():
     return {'message':'Insurance Premium Prediction API'}
 
-# MLFlow se aayega Model version
-MODEL_VERSION = "1.0.0"
+# machine readable
 @app.get('/health')
 def health_check():
     return {
         'status': 'OK',
-         'version': MODEL_VERSION,
+        'version': MODEL_VERSION,
         'model_loaded': model is not None
     }
 
-
-@app.post('/predict')
+@app.post('/predict', response_model=PredictionResponse)
 def predict_premium(data: UserInput):
 
-    input_df = pd.DataFrame([{
+    user_input = {
         'bmi': data.bmi,
         'age_group': data.age_group,
         'lifestyle_risk': data.lifestyle_risk,
         'city_tier': data.city_tier,
         'income_lpa': data.income_lpa,
         'occupation': data.occupation
-    }])
+    }
 
-    prediction = model.predict(input_df)[0]
+    try:
 
-    return JSONResponse(status_code=200, content={'predicted_category': prediction})
+        prediction = predict_output(user_input)
+
+        return JSONResponse(status_code=200, content={'response': prediction})
+    
+    except Exception as e:
+
+        return JSONResponse(status_code=500, content=str(e))
 
 
 
